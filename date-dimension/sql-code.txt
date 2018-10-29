@@ -1,0 +1,58 @@
+drop table dimensione_tempo;
+CREATE TABLE dimensione_tempo (
+	ID	 varchar(10),
+	Full_Date Date,
+	Anno Varchar(4),
+	Mese Varchar(2),
+	Giorno Varchar(2),
+	Settimana Varchar(2),
+	Trimestre Varchar(1),
+	Quadrimestre Varchar(1),
+	PRIMARY KEY (id)
+);
+
+
+-- Table create, let's populate it
+
+DELIMITER $$
+ DROP PROCEDURE IF EXISTS generate_time_dim$$
+ CREATE PROCEDURE generate_time_dim()
+ BEGIN
+	DECLARE x  INT;
+	DECLARE v_full_date DATE;
+ 	DECLARE str  VARCHAR(255);
+ 
+ 	SET v_full_date = "2000-01-01";
+ 	SET x = 1;
+ 
+ 	
+	WHILE x  <= 1000 DO
+	        INSERT INTO dimensione_tempo (
+			ID , Full_Date, Anno, Mese, Giorno, Settimana, Trimestre, Quadrimestre) 
+		VALUES (
+			DATE_FORMAT(v_full_date, '%Y%m%d'),
+			DATE_FORMAT(v_full_date, '%Y%m%d'),
+			YEAR(v_full_date),
+			MONTH(v_full_date),
+			DAY(v_full_date),
+			WEEK(v_full_date, 1),
+			QUARTER(v_full_date),
+			CEIL(MONTH(v_full_date)/4)		 
+                 	 );
+  	
+		SET v_full_date = DATE_ADD(v_full_date, INTERVAL 1 DAY);
+  		SET  x = x + 1; 
+ 	END WHILE;
+-- screen output with number of days populated 
+
+ 	SELECT x;
+
+-- reactivate standard delimiter 
+	END$$
+	DELIMITER ;
+
+-- call the procedure,view first 100 rows
+CALL generate_time_dim();
+SELECT * FROM dimensione_tempo LIMIT 5;
+SELECT COUNT(ID) FROM dimensione_tempo;
+
