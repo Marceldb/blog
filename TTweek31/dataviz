@@ -1,0 +1,249 @@
+
+# libraries
+
+library(readr)
+library(tidyverse)
+library(gridExtra)
+library(readxl)
+library(ggthemes)
+library(rworldmap)
+library(mapdata)
+library(maps)
+library(countrycode)
+library(lubridate)
+library(dplyr)
+library(gridExtra)
+
+
+
+# data loading
+# 1 year R downloads datathe tidytuesday data
+r_download_year <- read_csv("d:/datasets/TTweek31/r_downloads_year.csv")
+
+paste(nrow(r_download_year), "R downloads  found")
+summary(r_download_year)
+
+# additional tables  with country->continent& population codes
+# iso 3166 codes
+country_continent <- read_csv("d:/datasets/TTweek31/country_continent.csv")
+colnames( country_continent ) <- c("country","continent")
+# population from https://data.worldbank.org/indicator/SP.POP.TOTL
+population<- read_excel("D:/datasets/TTweek31/API_SP.POP.TOTL_DS2_en_excel_v2_10181007.xls", 
+                           skip = 2)
+# GDP per capita from https://data.worldbank.org/indicator/NY.GDP.PCAP.CD
+
+GDP_per_capita<- read_excel("D:/datasets/TTweek31/API_NY.GDP.PCAP.CD_DS2_en_excel_v2_10181000.xls", 
+                                skip = 2)
+
+### pre-processing
+# Population and GDP:we only use country name, code and last year population data
+population<- population %>% 
+  select('Country Name','Country Code','2017')
+colnames( population) <- c("Country_Name","Country_Code", "population")
+
+GDP_per_capita<- GDP_per_capita %>% 
+  select('Country Name','Country Code','2017')  
+colnames( GDP_per_capita) <- c("Country_Name","Country_Code", "GDP_PCP")
+
+
+
+# Downloads
+r_down_year<-r_download_year %>% 
+  select(date,time,size,version,os,country,ip_id)
+
+# Cleaning and wrangling
+r_down_year$region = countrycode(r_down_year$country, "iso2c", "country.name")
+r_down_year<-inner_join(r_down_year, country_continent, by = "country") 
+
+# filling in missing continent/sub continent labels: adding "NM" for north america, "CM" for central america
+# mexico is included in north or central america, depending 
+# on sources. Here's included in north america
+r_down_year$continent[which(r_down_year$country =="US" |
+                              r_down_year$country =="CA"|
+                              r_down_year$country =="VI"|
+                              r_down_year$country =="BM"|
+                              r_down_year$country =="MX")]= "NM" 
+r_down_year$continent[which(r_down_year$country =="TT" |
+                              r_down_year$country =="CR"|
+                              r_down_year$country =="DM"|
+                              r_down_year$country =="AG"|
+                              r_down_year$country =="AW"|
+                              r_down_year$country =="HN"|
+                              r_down_year$country =="PR"|
+                              r_down_year$country =="GT"|
+                              r_down_year$country =="SV"|
+                              r_down_year$country =="JM"|
+                              r_down_year$country =="DO"|
+                              r_down_year$country =="NI"|
+                              r_down_year$country =="BB"|
+                              r_down_year$country =="CU"|
+                              r_down_year$country =="NI"|
+                              r_down_year$country =="BZ"|
+                              r_down_year$country =="BS"|
+                              r_down_year$country =="GP"|
+                              r_down_year$country =="HT"|
+                              r_down_year$country =="TT"|
+                              r_down_year$country =="KN"|
+                              r_down_year$country =="KY"|
+                              r_down_year$country =="LC"|
+                              r_down_year$country =="VI"|
+                              r_down_year$country =="GD"|
+                              r_down_year$country =="VC"|
+                              r_down_year$country =="PA" )]= "CM" #centroamerica
+# greenland
+r_down_year$continent[which(r_down_year$country =="GL" )]= "EU"
+
+# russia
+population$Country_Name[which(population$Country_Name 
+                              =="Russian Federation" )]= "Russia"
+GDP_per_capita$Country_Name[which(GDP_per_capita$Country_Name 
+                              =="Russian Federation" )]= "Russia"
+
+# join with population
+r_down_year<-left_join(r_down_year, population,
+                        by = c("region"="Country_Name")) 
+
+
+#HOW MANY DOWNLOADS?
+p1<-r_down_year %>% 
+  filter(!is.na(os))%>%
+  ggplot(aes(x=date,y = ip_id ))+
+  geom_line()+
+  labs(title="Total R downloads by date",
+       subtitle = "20 Oct 2017 - 20 Oct 2018",
+       x="date",
+       y="R downloads",
+       caption = "Source: CRAN") 
+
+#p1
+
+
+
+
+
+# HOW MANY DOWNLOADS BY OS?
+p2<-r_down_year %>% 
+  select(everything()) %>% 
+  filter(!is.na(os))%>%
+  ggplot(aes(x=(date),fill=..count..)) +
+  geom_bar()    +
+  facet_grid(rows = vars(os))+
+  labs(title="R downloads by date, OS",
+       subtitle = "20 Oct 2017-20 Oct 2018",
+       x="date",
+       y="R downloads",
+       caption = "Source: CRAN") 
+#p2
+
+#p3
+grid.arrange(p1,p2, ncol=2, top="R Downloads")
+ 
+
+# downloads by day of the week factor+order
+r_down_year$day_of_week<- as.factor(weekdays(r_down_year$date))
+r_down_year$day_of_week<-ordered(r_down_year$day_of_week, 
+        levels = c("lunedì", "martedì", "mercoledì", "giovedì",
+                    "venerdì", "sabato", "domenica"))
+
+#p4
+r_down_year %>% 
+  select(everything()) %>% 
+  filter(!is.na(os))%>%
+  ggplot(aes(x=day_of_week,fill=..count..)) +
+  geom_bar()    +
+  facet_grid(rows = vars(os))+
+  labs(title="R downloads by day of week and OS",
+       subtitle = "20 Oct 2017-20 Oct 2018",
+       x="date",
+       y="R downloads",
+       caption = "Source: Analysis on CRAN data") 
+
+
+
+#Top countries?
+
+r_down_topcountry<-r_down_year %>% 
+  count(country, continent, region, population) %>% 
+   arrange(desc(n))
+
+r_down_topcountry$down_per_mille<-
+  (r_down_topcountry$n/r_down_topcountry$population)*1000
+
+top_down<-head(r_down_topcountry, n=5)
+
+options(scipen=999)
+p5<-top_down %>% 
+  ggplot(aes(x=country, y=n)) +
+  coord_flip() +
+  geom_bar(stat = "identity") +
+  theme_bw()+
+   labs(title="Top 5 World", 
+        y ="R Downloads",
+        caption = "Source: Analysis on CRAN data")
+p5
+
+#Top countries in EUrope?
+top_down_eu<-head(r_down_topcountry %>% 
+  filter(continent=="EU" & !is.na(population)), n=5)
+  
+p6<-top_down_eu %>% 
+  arrange(desc(n)) %>% 
+  ggplot(aes(x=country, y=n)) +
+  coord_flip() +
+  geom_bar(stat = "identity") +
+  theme_bw()+
+  labs(title="Top 5 EU", 
+       y = "R Downloads",
+       caption = "Source: Analysis on CRAN data")
+p6
+#p7
+grid.arrange(p5,p6, ncol=2, top="Top countries by R downloads")
+
+
+r_down_year %>%
+  select(everything()) %>% 
+  filter(continent !="--" & !is.na(continent))%>%
+  ggplot(aes(x=(date),fill=..count..)) +
+  geom_bar()    +
+    ylab("R downloads") +
+  facet_grid(cols = vars(continent))
+ 
+r_down_topcountry<-left_join(r_down_topcountry, GDP_per_capita,
+                           by = c("region"="Country_Name")) 
+
+r_down_topcountry<-r_down_topcountry %>% drop_na()
+
+
+
+# analysis per capita
+
+r_down_topcountry_PCP<-r_down_topcountry %>% 
+  arrange(desc(down_per_mille))
+
+top_down_PCP<-head(r_down_topcountry_PCP, n=5)
+
+p9<-top_down_PCP %>% 
+  ggplot(aes(x=country, y=down_per_mille)) +
+  coord_flip() +
+  geom_bar(stat = "identity") +
+  theme_bw()+
+  labs(title="Top 5 World", 
+       y ="R Downloads per 1000 people",
+       caption = "Source: Analysis on CRAN data")
+p9
+
+
+
+final_cor<-with(r_down_topcountry, cor(down_per_mille, GDP_PCP))
+
+P10<-r_down_topcountry %>% 
+  ggplot(aes(x=down_per_mille, y=GDP_PCP))+
+  geom_point() +
+  geom_smooth()+
+  theme_bw()+
+  labs(title="Rich countries downloads more R copies", 
+       subtitle= paste("Correlation coefficient R²:",final_cor),
+       caption = "Source: analysis on CRAN and World Bank data",
+       x = "Downloads per mille",
+       y = "GDP per capita")
+P10
